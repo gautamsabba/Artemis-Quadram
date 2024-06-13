@@ -143,6 +143,7 @@ public class EntryEdit extends JFrame
   private EntrySourceVector entry_sources;
 
   private SelectionInfoDisplay selection_info;
+  private ExternalLinkButton gene_info;
  
   private CommitButton commitButton;
   private static org.apache.log4j.Logger logger4j = 
@@ -247,6 +248,10 @@ public class EntryEdit extends JFrame
     selection_info =
       new SelectionInfoDisplay(getEntryGroup(), getSelection());
     box_panel.add(selection_info);
+
+    gene_info = new ExternalLinkButton(getEntryGroup(), getSelection());
+    box_panel.add(gene_info);
+
 
 
     final boolean entry_buttons_option =
@@ -650,6 +655,14 @@ public class EntryEdit extends JFrame
     return group_display;
   }
 
+
+  /**
+  * Retrieve the selection info display object.
+  */
+  protected ExternalLinkButton getExternalLinkButton()
+  {
+    return gene_info;
+  }
 
   /**
   * Retrieve the selection info display object.

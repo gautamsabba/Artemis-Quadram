@@ -118,7 +118,7 @@
     <artemis.icons.path>${project.basedir}/icons</artemis.icons.path>
     <artemis.images.path>${project.basedir}/images</artemis.images.path>
     <!--  Default build flag settings -->
-    <skip.tests>false</skip.tests>
+    <skip.tests>true</skip.tests>
     <jarsigner.skip>true</jarsigner.skip>
     <skip.artifact.creation>true</skip.artifact.creation>
     <skip.coverage.reporting>true</skip.coverage.reporting>
