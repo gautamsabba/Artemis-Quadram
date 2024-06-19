@@ -356,7 +356,7 @@ public class ProjectProperty extends JFrame
       projProps = centralProjects.get(projectList.getSelectedValue());
     else
       projProps = userProjects.get(projectList.getSelectedValue());
-
+    
     final HashMap<Integer, Vector<JTextField>> settings = new HashMap<Integer, Vector<JTextField>>();
     // order the keys
     Object keys[] = projProps.keySet().toArray();
@@ -417,8 +417,20 @@ public class ProjectProperty extends JFrame
                 vText.get(0).setText(fileChooser.getSelectedFile().getAbsolutePath());
               else
               {
-                projProps.put(keyStr, projProps.get(keyStr)+" "+
-                            fileChooser.getSelectedFile().getAbsolutePath());
+                File selectedFile = fileChooser.getSelectedFile();
+                String existingPaths = projProps.get(keyStr);
+                String newPath = selectedFile.getAbsolutePath();
+
+                // Check if the existing paths are empty or not to avoid leading semicolons
+                if(existingPaths.isEmpty()) {
+                    projProps.put(keyStr, newPath);
+                } else {
+                    // Append the new path with a preceding semicolon
+                    projProps.put(keyStr, existingPaths + ";" + newPath);
+                }
+                //projProps.put(keyStr, projProps.get(keyStr)+" "+fileChooser.getSelectedFile().getAbsolutePath());
+                //projProps.put(keyStr, projProps.get(keyStr) + ";" + fileChooser.getSelectedFile().getAbsolutePath());
+
                 refreshProperties(projectList, yBox, listener);
               }
             }
@@ -483,32 +495,20 @@ public class ProjectProperty extends JFrame
     listener.setSettings(settings);
   }
 
-  private Vector<String> splitLine(String line)
-  {
+  private Vector<String> splitLine(String line) {
     Vector<String> parts = new Vector<String>();
-    int index = line.indexOf(" ");
-    if(index < 0)
-      parts.add(line);
-    else
-    {
-      int startIndex = 0;
-      line = line.replaceAll("\\s+", " ");
-      while((index = line.indexOf(" ", startIndex)) > -1)
-      {
-        if(line.charAt(index-1) == '\\')
-        {
-          startIndex = index+1;
-          continue;
+    // Use semicolon as the delimiter to split the line
+    if (!line.contains(";")) {
+        parts.add(line.trim()); // Ensure to trim to remove any leading/trailing spaces
+    } else {
+        // Split by semicolon and trim each part to ensure no leading/trailing whitespace
+        for (String part : line.split(";")) {
+            parts.add(part.trim());
         }
-        parts.add(line.substring(0, index));
-        line = line.substring(index+1);
-        startIndex = 0;
-      }
-      parts.add(line);
     }
-    
     return parts;
-  }
+}
+
   
   private void addProperyToPanel(final JList projectList,
                                  final JPanel propPanel,
@@ -538,7 +538,7 @@ public class ProjectProperty extends JFrame
         if(key.equals("title")) // only takes one value
           anns = new String[]{ escapeSpace(projProps.get(key).trim()) };
         else
-          anns = projProps.get(key).trim().split("\\s+");
+          anns = projProps.get(key).trim().split(";");
         String value = "";
         for(int i=0;i<anns.length;i++)
         {
@@ -585,7 +585,7 @@ public class ProjectProperty extends JFrame
             "Remove", JOptionPane.YES_NO_OPTION);
         if(status != JOptionPane.YES_OPTION)
           return;
-        final String anns[] = projProps.get(key).trim().split("\\s+");
+        final String anns[] = projProps.get(key).trim().split(";");
         String value = "";
         for(int i=0;i<anns.length;i++)
         {
@@ -672,59 +672,45 @@ public class ProjectProperty extends JFrame
   * Write or re-write properties file
   * @param propFile      properties file
   */
-  protected static void writeProperties(final File propFile, 
-      HashMap<String, HashMap<String, String>> userProjects)
-  {
-    if(userProjects == null)
-      return;
+  protected static void writeProperties(final File propFile, HashMap<String, HashMap<String, String>> userProjects) {
+    if (userProjects == null)
+        return;
 
-    try
-    {
-      if(userProjects.size() > 0)
-      {
-        propFile.renameTo(new File(propFile.getAbsolutePath()+".bak"));
-        final BufferedWriter bufferedwriter = new BufferedWriter(new FileWriter(propFile));
-        for (String project: userProjects.keySet())
-        {
-          bufferedwriter.write("#");
-          bufferedwriter.newLine();
-          
-          HashMap<String, String> projProps = userProjects.get(project);
-          for(final String key: projProps.keySet())
-          {
-            final String val;
-            if(key.equals("title"))
-              val = escapeSpace(projProps.get(key).trim());
-            else
-              val = projProps.get(key).trim().replaceAll("\\s{2,}", " ");
+    try {
+        if (userProjects.size() > 0) {
+            propFile.renameTo(new File(propFile.getAbsolutePath() + ".bak"));
+            final BufferedWriter bufferedwriter = new BufferedWriter(new FileWriter(propFile));
+            for (String project : userProjects.keySet()) {
+                bufferedwriter.write("#");
+                bufferedwriter.newLine();
 
-            bufferedwriter.write("project."+project+"."+key+"="+val );
-            bufferedwriter.newLine();
-          }
-          
-          // unfortunately Properties.store() adds a timestamp as a comment
-          /*myProps.clear();
-          HashMap<String, String> projProps = userProjects.get(project);
-          for(final String key: projProps.keySet())
-            myProps.setProperty("project."+project+"."+key, 
-                projProps.get(key).trim().replaceAll("\\s+", " "));
-          myProps.store(bufferedwriter, null);*/
+                HashMap<String, String> projProps = userProjects.get(project);
+                for (final String key : projProps.keySet()) {
+                    String val = projProps.get(key).trim();
+
+                    // Check if the key is one of the specified file path keys
+                    if (key.equals("sequence") || key.equals("annotation") || key.equals("bam") || 
+                        key.equals("vcf") || key.equals("userplot") || key.equals("log_userplot")) {
+                        val = val.replace("\\", "/");  // Convert backslashes to forward slashes
+                    }
+
+                    val = val.replaceAll("\\s{2,}", " ");  // Reduce multiple spaces to one space
+
+                    bufferedwriter.write("project." + project + "." + key + "=" + val);
+                    bufferedwriter.newLine();
+                }
+            }
+            bufferedwriter.close();
+        } else {
+            propFile.delete();
         }
+    } catch (FileNotFoundException filenotfoundexception) {
+        System.err.println(propFile.getAbsolutePath() + " read error");
+    } catch (IOException e) {
+        System.err.println(propFile.getAbsolutePath() + " i/o error");
+    }
+}
 
-        bufferedwriter.close();
-      }
-      else
-        propFile.delete();
-    }
-    catch (FileNotFoundException filenotfoundexception)
-    {
-      System.err.println(propFile.getAbsolutePath()+" read error");
-    }
-    catch (IOException e)
-    {
-      System.err.println(propFile.getAbsolutePath()+" i/o error");
-    }
-  }
   
   /**
    * Open a database entry
