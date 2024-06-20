@@ -46,6 +46,7 @@ import javax.swing.JLabel;
 import javax.swing.JSplitPane;
 import javax.swing.JTextField;
 import javax.swing.JOptionPane;
+import javax.swing.JButton;
 import javax.swing.JCheckBoxMenuItem;
 import javax.swing.JMenuItem;
 import javax.swing.JScrollBar;
@@ -131,6 +132,16 @@ public abstract class Plot extends JPanel
   protected LineAttributes lines[];
   
   private int lastPaintHeight = getHeight();
+
+  private JButton scaleButton;
+  private JPanel labelPanel;
+
+  // List of numbers for the popup menu
+  private static final int[] SCALE_VALUES = {
+    30, 40, 50, 60, 80, 100, 120, 150, 180, 200,
+    250, 300, 350, 400, 500, 600, 800, 1000
+  };
+
   
   /** the minimum distance in pixels between the labels */
   private final static int MINIMUM_LABEL_SPACING = 50;
@@ -142,8 +153,7 @@ public abstract class Plot extends JPanel
    *  @param draw_scale If true then a scale line will be drawn at the bottom
    *    of the graph.
    **/
-  public Plot(Algorithm algorithm, boolean draw_scale) 
-  {
+  public Plot(Algorithm algorithm, boolean draw_scale) {
     super(new BorderLayout());
     this.algorithm = algorithm;
     this.draw_scale = draw_scale;
@@ -152,54 +162,98 @@ public abstract class Plot extends JPanel
     FontMetrics fm = getFontMetrics(getFont());
     font_height = fm.getHeight();
 
+    // Initialize the button
+    scaleButton = new JButton("Scale");
+    scaleButton.addActionListener(new ActionListener() {
+      public void actionPerformed(ActionEvent e) {
+          showScalePopupMenu();
+      }
+  });
+
+    
+
+    // Initialize the label panel
+    labelPanel = new JPanel() {
+        @Override
+        protected void paintComponent(Graphics g) {
+            super.paintComponent(g);
+            drawLabels(g, numPlots);
+        }
+    };
+
+    // Create a top panel to hold the labels and the button
+    JPanel topPanel = new JPanel(new BorderLayout());
+    topPanel.add(labelPanel, BorderLayout.CENTER);
+    topPanel.add(scaleButton, BorderLayout.EAST);
+    
+    this.add(topPanel, BorderLayout.NORTH);
+
     final int MAX_WINDOW;
-    if(getAlgorithm().getDefaultMaxWindowSize() != null) 
-      MAX_WINDOW = getAlgorithm().getDefaultMaxWindowSize().intValue();
-    else 
-      MAX_WINDOW = 500;
+    if (getAlgorithm().getDefaultMaxWindowSize() != null)
+        MAX_WINDOW = getAlgorithm().getDefaultMaxWindowSize().intValue();
+    else
+        MAX_WINDOW = 500;
 
     final int MIN_WINDOW;
-    if(getAlgorithm().getDefaultMinWindowSize() != null) 
-      MIN_WINDOW = getAlgorithm().getDefaultMinWindowSize().intValue();
-    else 
-      MIN_WINDOW = 5;
+    if (getAlgorithm().getDefaultMinWindowSize() != null)
+        MIN_WINDOW = getAlgorithm().getDefaultMinWindowSize().intValue();
+    else
+        MIN_WINDOW = 5;
 
     final int START_WINDOW;
-    if(getAlgorithm().getDefaultWindowSize() == null) 
-      START_WINDOW = 10;
-    else 
-      START_WINDOW = getAlgorithm().getDefaultWindowSize().intValue();
+    if (getAlgorithm().getDefaultWindowSize() == null)
+        START_WINDOW = 10;
+    else
+        START_WINDOW = getAlgorithm().getDefaultWindowSize().intValue();
 
     window_changer = new JScrollBar(Scrollbar.VERTICAL);
     window_changer.setValues(START_WINDOW, SCROLL_NOB_SIZE,
-                             MIN_WINDOW, MAX_WINDOW + SCROLL_NOB_SIZE);
-    if(MAX_WINDOW >= 50) 
-      window_changer.setBlockIncrement(MAX_WINDOW/50);
-    else 
-      window_changer.setBlockIncrement(1);
+            MIN_WINDOW, MAX_WINDOW + SCROLL_NOB_SIZE);
+    if (MAX_WINDOW >= 50)
+        window_changer.setBlockIncrement(MAX_WINDOW / 50);
+    else
+        window_changer.setBlockIncrement(1);
 
-    window_changer.addAdjustmentListener(new AdjustmentListener()
-    {
-      public void adjustmentValueChanged(AdjustmentEvent e) 
-      {
-        recalculate_flag = true;
-        repaint();
-      }
+    window_changer.addAdjustmentListener(new AdjustmentListener() {
+        public void adjustmentValueChanged(AdjustmentEvent e) {
+            recalculate_flag = true;
+            repaint();
+        }
     });
 
-    addComponentListener(new ComponentAdapter() 
-    {
-      public void componentShown(ComponentEvent e) 
-      {
-        recalculate_flag = true;
-        repaint();
-      }
+    addComponentListener(new ComponentAdapter() {
+        public void componentShown(ComponentEvent e) {
+            recalculate_flag = true;
+            repaint();
+        }
     });
 
     add(window_changer, "East");
     addMouseListener(mouse_listener);
     addMouseMotionListener(mouse_motion_listener);
+ }
+
+ // Method to show the scale popup menu
+ private void showScalePopupMenu() {
+  JPopupMenu scaleMenu = new JPopupMenu();
+  for (int value : SCALE_VALUES) {
+      JMenuItem menuItem = new JMenuItem(String.valueOf(value));
+      menuItem.addActionListener(new ActionListener() {
+          public void actionPerformed(ActionEvent e) {
+              scaleButton.setText("Scale - " + value);
+              getAlgorithm().setUserMaxMin(true);
+              getAlgorithm().setUserMax((float) value);
+              //getAlgorithm().setUserMin((float) value);
+              ((BasePlot)Plot.this).setMax_value((float) value);
+              //((BasePlot)Plot.this).setMin_value((float) value);
+              getAlgorithm().setScalingFlag(false);
+              repaint();
+          }
+      });
+      scaleMenu.add(menuItem);
   }
+  scaleMenu.show(scaleButton, scaleButton.getWidth() / 2, scaleButton.getHeight() / 2);
+}
 
   /**
    *  Return the algorithm that was passed to the constructor.
@@ -1020,30 +1074,27 @@ public abstract class Plot extends JPanel
    *  window size in the bottom left.
    *  @param g The object to draw into.
    **/
-  private void drawLabels(final Graphics g, final int numPlots) 
-  {
+  private void drawLabels(final Graphics g, final int numPlots) {
     g.setColor(Color.black);
 
     String desc = getAlgorithm().getAlgorithmName() + "  Window size: " +
-                  String.valueOf(window_changer.getValue());
+            String.valueOf(window_changer.getValue());
 
     g.drawString(desc, 2, font_height);
 
-    if(numPlots < 2 || numPlots > 10)
-      return;
+    if (numPlots < 2 || numPlots > 10)
+        return;
 
     final FontMetrics fm = g.getFontMetrics();
     int font_width = fm.stringWidth("2");
 
-    int width = 0;
-    for(LineAttributes ln : lines)
-      width += ln.getLabelWidth(fm);
-    width = getWidth() - window_changer.getWidth() - width;
+    int width = getWidth() - window_changer.getWidth() - scaleButton.getWidth() - 60; // Adjust for button and padding
 
-    g.translate(width,0);
-    ((BaseAlgorithm)getAlgorithm()).drawLegend(g,font_height,
-                                               font_width,lines, numPlots);
-    g.translate(-width,0);
+
+    g.translate(width, 0);
+    ((BaseAlgorithm) getAlgorithm()).drawLegend(g, font_height,
+            font_width, lines, numPlots);
+    g.translate(-width, 0);
   }
 
   /**

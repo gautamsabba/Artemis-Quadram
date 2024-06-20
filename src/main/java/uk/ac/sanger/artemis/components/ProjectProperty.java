@@ -429,7 +429,7 @@ public class ProjectProperty extends JFrame
                     projProps.put(keyStr, existingPaths + ";" + newPath);
                 }
                 //projProps.put(keyStr, projProps.get(keyStr)+" "+fileChooser.getSelectedFile().getAbsolutePath());
-                //projProps.put(keyStr, projProps.get(keyStr) + ";" + fileChooser.getSelectedFile().getAbsolutePath());
+                projProps.put(keyStr, projProps.get(keyStr) + ";" + fileChooser.getSelectedFile().getAbsolutePath());
 
                 refreshProperties(projectList, yBox, listener);
               }
