@@ -39,6 +39,7 @@ import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URISyntaxException;
+import java.net.URL;
 
 import java.util.Arrays;
 import java.util.Comparator;
@@ -71,6 +72,8 @@ import javax.swing.event.DocumentListener;
 import javax.swing.event.ListSelectionEvent;
 import javax.swing.event.ListSelectionListener;
 
+import org.apache.log4j.PropertyConfigurator;
+
 import uk.ac.sanger.artemis.Options;
 import uk.ac.sanger.artemis.components.database.DatabaseEntrySource;
 import uk.ac.sanger.artemis.components.database.DatabaseJPanel;
@@ -100,6 +103,20 @@ public class ProjectProperty extends JFrame
   private final static int USERPLOT = 5;
   private final static int LOGUSERPLOT = 6;
   private final static int VCF = 7;
+  static {
+    // Initialize log4j with the configuration file from the classpath
+    try (InputStream configStream = ProjectProperty.class.getClassLoader().getResourceAsStream("log4j.properties")) {
+        if (configStream != null) {
+            PropertyConfigurator.configure(configStream);
+            System.out.println("log4j.properties file found and loaded.");
+        } else {
+            System.err.println("log4j.properties file not found in the classpath");
+        }
+    } catch (Exception e) {
+        e.printStackTrace();
+    }
+  }
+
   private static org.apache.log4j.Logger logger4j = 
       org.apache.log4j.Logger.getLogger(ProjectProperty.class);
   
@@ -125,6 +142,7 @@ public class ProjectProperty extends JFrame
   public ProjectProperty(Splash splash)
   {
     super("Project File Manager");
+    logger4j.debug("ProjectProperty constructor");
     this.splash = splash;
     InputStream ins = 
         this.getClass().getClassLoader().getResourceAsStream("etc/project.properties");
@@ -346,127 +364,107 @@ public class ProjectProperty extends JFrame
    * @param listener
    */
   private void refreshProperties(final JList projectList, 
-                                 final Box yBox, 
-                                 final LaunchActionListener listener)
-  {
+                               final Box yBox, 
+                               final LaunchActionListener listener) {
     yBox.removeAll();
 
     final HashMap<String, String> projProps;
-    if(centralProjects.containsKey(projectList.getSelectedValue()))
-      projProps = centralProjects.get(projectList.getSelectedValue());
+    if (centralProjects.containsKey(projectList.getSelectedValue()))
+        projProps = centralProjects.get(projectList.getSelectedValue());
     else
-      projProps = userProjects.get(projectList.getSelectedValue());
-    
+        projProps = userProjects.get(projectList.getSelectedValue());
+
     final HashMap<Integer, Vector<JTextField>> settings = new HashMap<Integer, Vector<JTextField>>();
-    // order the keys
     Object keys[] = projProps.keySet().toArray();
     Arrays.sort(keys, new TypeComparator());
 
-    for(final Object key: keys)
-    {
-      final String keyStr = (String) key;
-      final Vector<JTextField> vText = new Vector<JTextField>();
-      
-      Border lineBorder = BorderFactory.createLineBorder(Color.DARK_GRAY);
-      TitledBorder title = BorderFactory.createTitledBorder(
-          lineBorder, keyStr);
-      //title.setTitlePosition(TitledBorder.LEFT);
+    for (final Object key : keys) {
+        final String keyStr = (String) key;
+        final Vector<JTextField> vText = new Vector<JTextField>();
 
-      final JPanel propPanel = new JPanel(new GridBagLayout());
-      GridBagConstraints c = new GridBagConstraints();
-      c.gridy = 0;
-      
-      c.fill = GridBagConstraints.BOTH;
-      propPanel.setBorder(title);
-      propPanel.setBackground(Color.WHITE);
-      
-      //
-      final Vector<JCheckBox> checkBoxes = new Vector<JCheckBox>();
-      final JButton toggle = new JButton("Toggle");
-      toggle.setToolTipText("toggle "+keyStr+" selection");
-      toggle.addActionListener(new ActionListener(){
-        public void actionPerformed(ActionEvent arg0)
-        {
-           for(JCheckBox cb: checkBoxes)
-             cb.setSelected(!cb.isSelected());
-        }
-      });
-               
-      final Vector<String> anns = splitLine(projProps.get(keyStr).trim());
-      for (int i=0; i<anns.size(); i++)
-      {
-        c.gridx = 0;
-        addProperyToPanel(projectList, propPanel, vText, c, i, anns.get(i), projProps, keyStr, yBox, listener, checkBoxes);
-      }
-      
-      if (!keyStr.equals("title") && !keyStr.equals("chado"))
-      {
-        Box xBox = Box.createHorizontalBox();
-        final JButton selectButton = new JButton(
-            keyStr.startsWith("seq") ? "Select " : "Add file");
-        selectButton.addActionListener(new ActionListener()
-        {
-          public void actionPerformed(ActionEvent e)
-          {
-            StickyFileChooser fileChooser = new StickyFileChooser();
-            int status = fileChooser.showOpenDialog(ProjectProperty.this);
+        Border lineBorder = BorderFactory.createLineBorder(Color.DARK_GRAY);
+        TitledBorder title = BorderFactory.createTitledBorder(lineBorder, keyStr);
 
-            if(status == StickyFileChooser.APPROVE_OPTION)
-            {
-              if(keyStr.startsWith("seq"))
-                vText.get(0).setText(fileChooser.getSelectedFile().getAbsolutePath());
-              else
-              {
-                File selectedFile = fileChooser.getSelectedFile();
-                String existingPaths = projProps.get(keyStr);
-                String newPath = selectedFile.getAbsolutePath();
+        final JPanel propPanel = new JPanel(new GridBagLayout());
+        GridBagConstraints c = new GridBagConstraints();
+        c.gridy = 0;
+        c.fill = GridBagConstraints.BOTH;
+        propPanel.setBorder(title);
+        propPanel.setBackground(Color.WHITE);
 
-                // Check if the existing paths are empty or not to avoid leading semicolons
-                if(existingPaths.isEmpty()) {
-                    projProps.put(keyStr, newPath);
-                } else {
-                    // Append the new path with a preceding semicolon
-                    projProps.put(keyStr, existingPaths + ";" + newPath);
-                }
-                //projProps.put(keyStr, projProps.get(keyStr)+" "+fileChooser.getSelectedFile().getAbsolutePath());
-                projProps.put(keyStr, projProps.get(keyStr) + ";" + fileChooser.getSelectedFile().getAbsolutePath());
-
-                refreshProperties(projectList, yBox, listener);
-              }
+        final Vector<JCheckBox> checkBoxes = new Vector<JCheckBox>();
+        final JButton toggle = new JButton("Toggle");
+        toggle.setToolTipText("toggle " + keyStr + " selection");
+        toggle.addActionListener(new ActionListener() {
+            public void actionPerformed(ActionEvent arg0) {
+                for (JCheckBox cb : checkBoxes)
+                    cb.setSelected(!cb.isSelected());
             }
-          }
         });
-        c.gridy = c.gridy+1;
-        
-        c.gridx = 0;
-        xBox.add(selectButton);
-        xBox.add(Box.createHorizontalGlue());
-        if(checkBoxes.size() > 1) // add toggle option
-          xBox.add(toggle, c);
-        
-        c.gridwidth = 2;
-        propPanel.add(xBox, c);
-        c.gridwidth = 1;
-      }
-      
-      yBox.add(propPanel);
-      
-      if(keyStr.startsWith("seq"))
-        settings.put(ProjectProperty.REFERENCE, vText);
-      else if(keyStr.equals("annotation"))
-        settings.put(ProjectProperty.ANNOTATION, vText);
-      else if(keyStr.equals("bam"))
-        settings.put(ProjectProperty.NEXT_GEN_DATA, vText);
-      else if(keyStr.equals("vcf") || keyStr.equals("bcf"))
-        settings.put(ProjectProperty.VCF, vText);
-      else if(keyStr.equals("chado"))
-        settings.put(ProjectProperty.CHADO, vText);
-      else if(keyStr.equals("userplot"))
-        settings.put(ProjectProperty.USERPLOT, vText);
-      else if(keyStr.equals("log_userplot"))
-        settings.put(ProjectProperty.LOGUSERPLOT, vText);
+
+        final Vector<String> anns = splitLine(projProps.get(keyStr).trim());
+        for (int i = 0; i < anns.size(); i++) {
+            c.gridx = 0;
+            addProperyToPanel(projectList, propPanel, vText, c, i, anns.get(i), projProps, keyStr, yBox, listener, checkBoxes);
+        }
+
+        if (!keyStr.equals("title") && !keyStr.equals("chado")) {
+            Box xBox = Box.createHorizontalBox();
+            final JButton selectButton = new JButton(keyStr.startsWith("seq") ? "Select " : "Add file");
+            selectButton.addActionListener(new ActionListener() {
+                public void actionPerformed(ActionEvent e) {
+                    StickyFileChooser fileChooser = new StickyFileChooser();
+                    int status = fileChooser.showOpenDialog(ProjectProperty.this);
+
+                    if (status == StickyFileChooser.APPROVE_OPTION) {
+                        File selectedFile = fileChooser.getSelectedFile();
+                        String newPath = selectedFile.getAbsolutePath();
+
+                        if (keyStr.startsWith("seq")) {
+                            vText.get(0).setText(newPath);
+                        } else {
+                            String existingPaths = projProps.get(keyStr);
+                            if (!existingPaths.contains(newPath)) {
+                                if (existingPaths.isEmpty()) {
+                                    projProps.put(keyStr, newPath);
+                                } else {
+                                    projProps.put(keyStr, existingPaths + ";" + newPath);
+                                }
+                                refreshProperties(projectList, yBox, listener);
+                            }
+                        }
+                    }
+                }
+            });
+            c.gridy = c.gridy + 1;
+            c.gridx = 0;
+            xBox.add(selectButton);
+            xBox.add(Box.createHorizontalGlue());
+            if (checkBoxes.size() > 1) // add toggle option
+                xBox.add(toggle, c);
+            c.gridwidth = 2;
+            propPanel.add(xBox, c);
+            c.gridwidth = 1;
+        }
+
+        yBox.add(propPanel);
+
+        if (keyStr.startsWith("seq"))
+            settings.put(ProjectProperty.REFERENCE, vText);
+        else if (keyStr.equals("annotation"))
+            settings.put(ProjectProperty.ANNOTATION, vText);
+        else if (keyStr.equals("bam"))
+            settings.put(ProjectProperty.NEXT_GEN_DATA, vText);
+        else if (keyStr.equals("vcf") || keyStr.equals("bcf"))
+            settings.put(ProjectProperty.VCF, vText);
+        else if (keyStr.equals("chado"))
+            settings.put(ProjectProperty.CHADO, vText);
+        else if (keyStr.equals("userplot"))
+            settings.put(ProjectProperty.USERPLOT, vText);
+        else if (keyStr.equals("log_userplot"))
+            settings.put(ProjectProperty.LOGUSERPLOT, vText);
     }
-    
+
     // ADD property
     Box xBox = Box.createHorizontalBox();
     final JButton addPropertyButton = new JButton("NEW PROPERTY");
@@ -475,39 +473,36 @@ public class ProjectProperty extends JFrame
     xBox.add(propertyList);
     xBox.add(Box.createHorizontalGlue());
     yBox.add(xBox);
-    addPropertyButton.addActionListener(new ActionListener(){
-      public void actionPerformed(ActionEvent arg0)
-      {
-        String key = (String) propertyList.getSelectedItem();
-        if(!projProps.containsKey(key))
-        {
-          projProps.put(key, "");
-          refreshProperties(projectList, yBox, listener);
+    addPropertyButton.addActionListener(new ActionListener() {
+        public void actionPerformed(ActionEvent arg0) {
+            String key = (String) propertyList.getSelectedItem();
+            if (!projProps.containsKey(key)) {
+                projProps.put(key, "");
+                refreshProperties(projectList, yBox, listener);
+            }
         }
-      }
     });
-    
-    //
+
     yBox.add(Box.createVerticalGlue());
     yBox.revalidate();
     yBox.repaint();
-    
+
     listener.setSettings(settings);
   }
 
+
   private Vector<String> splitLine(String line) {
     Vector<String> parts = new Vector<String>();
-    // Use semicolon as the delimiter to split the line
     if (!line.contains(";")) {
-        parts.add(line.trim()); // Ensure to trim to remove any leading/trailing spaces
+        parts.add(line.trim());
     } else {
-        // Split by semicolon and trim each part to ensure no leading/trailing whitespace
         for (String part : line.split(";")) {
             parts.add(part.trim());
         }
     }
     return parts;
-}
+  }
+
 
   
   private void addProperyToPanel(final JList projectList,
@@ -763,100 +758,105 @@ public class ProjectProperty extends JFrame
       this.settings = settings;
     }
     
-    private String[] getArgs()
-    {
-      try
-      {
-        System.getProperties().remove("bam");
-        System.getProperties().remove("chado");
-        System.getProperties().remove("userplot");
-        System.getProperties().remove("loguserplot");
+    private String[] getArgs() {
+      // Clear system properties
+      try {
+          System.getProperties().remove("bam");
+          System.getProperties().remove("chado");
+          System.getProperties().remove("userplot");
+          System.getProperties().remove("loguserplot");
+      } catch (Exception e) {
+          e.printStackTrace();
       }
-      catch(Exception e){ e.printStackTrace(); }
-      
-      boolean seenSequence  = false;
+  
+      boolean seenSequence = false;
       final Set<Integer> keys = settings.keySet();
       final Vector<String> vargs = new Vector<String>();
       final Vector<String> vann = new Vector<String>();
-      
-      for(Integer key: keys)
-      {
-        final Vector<JTextField> vText = settings.get(key);
-        switch(key)
-        {
-          case ProjectProperty.REFERENCE:
-            String ref = vText.get(0).getText().trim();
-            if(!ref.equals(""))
-              seenSequence = true;
-            vargs.add( ref );
-            break;
-          case ProjectProperty.ANNOTATION:
-            for(JTextField ann: vText)
-              if(ann.isEnabled())
-                vann.add( ann.getText().trim() );
-            break;
-          case ProjectProperty.NEXT_GEN_DATA :
-            setBam(vText);
-            break;
-          case ProjectProperty.VCF :
-            setBam(vText);
-            break;
-          case ProjectProperty.USERPLOT:
-            String userplot = "";
-            for(JTextField ann: vText)
-            {
-              if(ann.isEnabled())
-                userplot += ","+ann.getText().trim();
-            }
-            if(!userplot.equals(""))
-              System.setProperty("userplot", userplot.replaceFirst(",", "")); 
-            break;
-          case ProjectProperty.LOGUSERPLOT:
-            String loguserplot = "";
-            for(JTextField ann: vText)
-            {
-              if(ann.isEnabled())
-                loguserplot += ","+ann.getText().trim();
-            }
-            if(!loguserplot.equals(""))
-              System.setProperty("loguserplot", loguserplot.replaceFirst(",", "")); 
-            break;
-          case ProjectProperty.CHADO:
-            seenSequence = true;
-            System.setProperty("chado", vText.get(0).getText().trim());
-            break;
-        }
+  
+      for (Integer key : keys) {
+          final Vector<JTextField> vText = settings.get(key);
+          switch (key) {
+              case ProjectProperty.REFERENCE:
+                  String ref = quotePath(vText.get(0).getText().trim());
+                  if (!ref.equals(""))
+                      seenSequence = true;
+                  vargs.add(ref);
+                  break;
+              case ProjectProperty.ANNOTATION:
+                  for (JTextField ann : vText) {
+                      if (ann.isEnabled())
+                          vann.add(quotePath(ann.getText().trim()));
+                  }
+                  break;
+              case ProjectProperty.NEXT_GEN_DATA:
+                  setBam(vText);
+                  break;
+              case ProjectProperty.VCF:
+                  setBam(vText);
+                  break;
+              case ProjectProperty.USERPLOT:
+                  String userplot = "";
+                  for (JTextField ann : vText) {
+                      if (ann.isEnabled())
+                          userplot += "," + quotePath(ann.getText().trim());
+                  }
+                  if (!userplot.equals(""))
+                      System.setProperty("userplot", userplot.replaceFirst(",", ""));
+                  System.out.println("userplot property set to: " + System.getProperty("userplot"));
+                  break;
+              case ProjectProperty.LOGUSERPLOT:
+                  String loguserplot = "";
+                  for (JTextField ann : vText) {
+                      if (ann.isEnabled())
+                          loguserplot += "," + quotePath(ann.getText().trim());
+                  }
+                  if (!loguserplot.equals(""))
+                      System.setProperty("loguserplot", loguserplot.replaceFirst(",", ""));
+                  break;
+              case ProjectProperty.CHADO:
+                  seenSequence = true;
+                  System.setProperty("chado", quotePath(vText.get(0).getText().trim()));
+                  break;
+          }
       }
-      
-      if(!seenSequence)
-        JOptionPane.showMessageDialog(ProjectProperty.this, 
-            "No sequence file entered for this project.", 
-            "Sequence Entry Missing", JOptionPane.WARNING_MESSAGE);
-      
-      String[] args = new String[vargs.size()+(vann.size()*2)];
-      for(int i=0; i<vargs.size(); i++)
-        args[i] = vargs.get(i);
-      for(int i=0; i<vann.size(); i++)
-      {
-        args[vargs.size()+(i*2)] = "+";
-        args[vargs.size()+(i*2)+1] = vann.get(i);
+  
+      if (!seenSequence)
+          JOptionPane.showMessageDialog(ProjectProperty.this,
+              "No sequence file entered for this project.",
+              "Sequence Entry Missing", JOptionPane.WARNING_MESSAGE);
+  
+      String[] args = new String[vargs.size() + (vann.size() * 2)];
+      for (int i = 0; i < vargs.size(); i++)
+          args[i] = vargs.get(i);
+      for (int i = 0; i < vann.size(); i++) {
+          args[vargs.size() + (i * 2)] = "+";
+          args[vargs.size() + (i * 2) + 1] = vann.get(i);
       }
+      logger4j.debug("VARGS:" + vargs);
       return args;
-    }
-    
-    private void setBam(final Vector<JTextField> vText)
-    {
-      String bam = "";
-      for(JTextField ann: vText)
-        if(ann.isEnabled())
-          bam += ","+ann.getText().trim();
-      if(!bam.equals(""))
-      {
-        if(System.getProperty("bam") != null)
-          bam += ","+System.getProperty("bam");
-        System.setProperty("bam", bam.replaceFirst(",", ""));
+  }
+  
+  private String quotePath(String path) {
+      if (path.contains(" ")) {
+          return "\"" + path + "\"";
       }
-    }
+      return path;
+  }
+  
+  private void setBam(final Vector<JTextField> vText) {
+      String bam = "";
+      for (JTextField ann : vText) {
+          if (ann.isEnabled())
+              bam += "," + quotePath(ann.getText().trim());
+      }
+      if (!bam.equals("")) {
+          if (System.getProperty("bam") != null)
+              bam += "," + System.getProperty("bam");
+          System.setProperty("bam", bam.replaceFirst(",", ""));
+      }
+  }
+  
     
     public void actionPerformed(ActionEvent arg0)
     {
@@ -871,6 +871,7 @@ public class ProjectProperty extends JFrame
         public void run() 
         {
           final String[] args = getArgs();
+
           if(System.getProperty("chado") != null &&
              args != null &&
              args.length == 1 &&

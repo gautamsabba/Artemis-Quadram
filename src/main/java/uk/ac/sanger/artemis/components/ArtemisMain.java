@@ -39,6 +39,7 @@ import uk.ac.sanger.artemis.util.OutOfRangeException;
 import uk.ac.sanger.artemis.util.InputStreamProgressListener;
 import uk.ac.sanger.artemis.io.EntryInformation;
 
+import org.apache.log4j.PropertyConfigurator;
 import org.biojava.bio.seq.io.SequenceFormat;
 
 import java.awt.event.*;
@@ -68,6 +69,23 @@ public class ArtemisMain extends Splash
   protected static FileManager filemanager = null;
   
   private LocalAndRemoteFileManager fm;
+
+  static {
+    // Initialize log4j with the configuration file from the classpath
+    try (InputStream configStream = ProjectProperty.class.getClassLoader().getResourceAsStream("log4j.properties")) {
+        if (configStream != null) {
+            PropertyConfigurator.configure(configStream);
+            System.out.println("log4j.properties file found and loaded.");
+        } else {
+            System.err.println("log4j.properties file not found in the classpath");
+        }
+    } catch (Exception e) {
+        e.printStackTrace();
+    }
+  }
+
+  private static org.apache.log4j.Logger logger4j = 
+      org.apache.log4j.Logger.getLogger(ArtemisMain.class);
   
   /**
    *  The constructor creates all the components for the main Artemis 
@@ -280,185 +298,139 @@ public class ArtemisMain extends Splash
     entryWorker.start();
   }
   
-  /**
-   *  Read the entries named in args and in the diana.ini file.
-   **/
-  protected void readArgsAndOptions(final String [] args, final JFrame f)
-  {
+  protected void readArgsAndOptions(final String [] args, final JFrame f) {
     processJnlpAttributes();
-    if(args.length == 0) 
-    {
-      if(System.getProperty("chado") != null && 
-         (args.length < 1 || args[0].indexOf(':') == -1))
-        fm = new LocalAndRemoteFileManager(ArtemisMain.this);
+    if (args.length == 0) {
+        if (System.getProperty("chado") != null && 
+            (args.length < 1 || args[0].indexOf(':') == -1)) {
+            fm = new LocalAndRemoteFileManager(ArtemisMain.this);
+        }
         
-      // open the entries given in the options file(diana.ini)
-      readDefaultEntries();
-      return;
+        // Open the entries given in the options file (diana.ini)
+        readDefaultEntries();
+        return;
     }
 
-    if(args[0].equals("-biojava")) 
-    {
-      handleBioJava(args);
-      return;
+    if (args[0].equals("-biojava")) {
+        handleBioJava(args);
+        return;
     }
 
-    final EntryInformation artemis_entry_information =
-                          Options.getArtemisEntryInformation();
-
+    final EntryInformation artemis_entry_information = Options.getArtemisEntryInformation();
     EntryEdit last_entry_edit = null;
     boolean seen_plus = false;
 
-    for(int i = 0 ; i<args.length ; ++i) 
-    {
-      String new_entry_name = args[i];
+    for (int i = 0; i < args.length; ++i) {
+        String new_entry_name = args[i];
+        new_entry_name = stripQuotes(new_entry_name);
+        logger4j.debug("New Entry: " + new_entry_name);
 
-      if(new_entry_name.length() == 0) 
-        continue;
+        if (new_entry_name.length() == 0) 
+            continue;
 
-      if(new_entry_name.equals("+")) 
-      {
-        seen_plus = true;
-        continue;
-      }
-
-      if(new_entry_name.startsWith("+") && last_entry_edit != null ||
-         seen_plus) 
-      {
-        // new feature file
-
-        final Document entry_document;
-
-        if(seen_plus) 
-          entry_document = DocumentFactory.makeDocument(new_entry_name);
-        else 
-          entry_document =
-            DocumentFactory.makeDocument(new_entry_name.substring(1));
-
-        final InputStreamProgressListener progress_listener =
-                                     getInputStreamProgressListener();
-
-        entry_document.addInputStreamProgressListener(progress_listener);
-
-        final uk.ac.sanger.artemis.io.Entry new_embl_entry =
-          EntryFileDialog.getEntryFromFile(f, entry_document,
-                                           artemis_entry_information,
-                                           false);
-
-        if(new_embl_entry == null)  // the read failed
-          break;
-
-        try
-        {
-          final Entry new_entry =
-            new Entry(last_entry_edit.getEntryGroup().getBases(),
-                      new_embl_entry);
-
-          last_entry_edit.getEntryGroup().add(new_entry);
-        } 
-        catch(OutOfRangeException e) 
-        {
-          new MessageDialog(this, "read failed: one of the features in " +
-                             new_entry_name + " has an out of range " +
-                             "location: " + e.getMessage());
-        }
-        seen_plus = false; // reset
-      }
-      else if(System.getProperty("chado") != null && new_entry_name.indexOf(':')>-1)
-      {
-        // open from database e.g. Pfalciparum:Pf3D7_09:95000..150000
-        Splash.logger4j.info("OPEN ENTRY "+new_entry_name);
-        getStatusLabel().setText("Connecting ...");
-        DatabaseEntrySource entry_source = new DatabaseEntrySource();
-
-        boolean promptUser = true;
-        if(System.getProperty("read_only") != null)
-        {
-          promptUser = false;
-          entry_source.setReadOnly(true);
-        }
-        
-        last_entry_edit = dbLogin(entry_source, promptUser, new_entry_name);
-        if(last_entry_edit == null)
-          return;
-      }
-      else
-      {
-        // new sequence file
-
-        if(last_entry_edit != null) 
-        {
-          last_entry_edit.setVisible(true);
-          last_entry_edit = null;
+        if (new_entry_name.equals("+")) {
+            seen_plus = true;
+            continue;
         }
 
-        if (new_entry_name.indexOf ("-psn_") != -1) 
-        {
-        	// Bit of a hack - to ignore special Mac OSX args
-        	continue;
+        if (new_entry_name.startsWith("+") && last_entry_edit != null || seen_plus) {
+            // New feature file
+            final Document entry_document;
+
+            if (seen_plus) 
+                entry_document = DocumentFactory.makeDocument(new_entry_name);
+            else 
+                entry_document = DocumentFactory.makeDocument(new_entry_name.substring(1));
+
+            final InputStreamProgressListener progress_listener = getInputStreamProgressListener();
+            entry_document.addInputStreamProgressListener(progress_listener);
+
+            final uk.ac.sanger.artemis.io.Entry new_embl_entry = EntryFileDialog.getEntryFromFile(f, entry_document, artemis_entry_information, false);
+
+            if (new_embl_entry == null) // The read failed
+                break;
+
+            try {
+                final Entry new_entry = new Entry(last_entry_edit.getEntryGroup().getBases(), new_embl_entry);
+                last_entry_edit.getEntryGroup().add(new_entry);
+            } catch (OutOfRangeException e) {
+                new MessageDialog(this, "read failed: one of the features in " + new_entry_name + " has an out of range location: " + e.getMessage());
+            }
+            seen_plus = false; // Reset
+        } else if (System.getProperty("chado") != null && new_entry_name.indexOf(':') > -1) {
+            // Open from database e.g. Pfalciparum:Pf3D7_09:95000..150000
+            Splash.logger4j.info("OPEN ENTRY " + new_entry_name);
+            getStatusLabel().setText("Connecting ...");
+            DatabaseEntrySource entry_source = new DatabaseEntrySource();
+
+            boolean promptUser = true;
+            if (System.getProperty("read_only") != null) {
+                promptUser = false;
+                entry_source.setReadOnly(true);
+            }
+            
+            last_entry_edit = dbLogin(entry_source, promptUser, new_entry_name);
+            if (last_entry_edit == null)
+                return;
+        } else {
+            // New sequence file
+            if (last_entry_edit != null) {
+                last_entry_edit.setVisible(true);
+                last_entry_edit = null;
+            }
+
+            if (new_entry_name.indexOf("-psn_") != -1) {
+                // Bit of a hack - to ignore special Mac OSX args
+                continue;
+            }
+
+            if (new_entry_name.indexOf("://") == -1) {
+                File file = new File(new_entry_name);
+                if (!file.exists()) {
+                    JOptionPane.showMessageDialog(null, "File " + new_entry_name + " not found.\nCheck the file name.", "File Not Found", JOptionPane.WARNING_MESSAGE);
+                }
+            }
+
+            final Document entry_document = DocumentFactory.makeDocument(new_entry_name);
+            entry_document.addInputStreamProgressListener(getInputStreamProgressListener());
+
+            final uk.ac.sanger.artemis.io.Entry new_embl_entry = EntryFileDialog.getEntryFromFile(f, entry_document, artemis_entry_information, false);
+
+            if (new_embl_entry == null) // The read failed
+                break;
+
+            try {
+                final Entry entry = new Entry(new_embl_entry);
+                last_entry_edit = makeEntryEdit(entry);
+                addEntryEdit(last_entry_edit);
+                getStatusLabel().setText("");
+            } catch (OutOfRangeException e) {
+                new MessageDialog(this, "read failed: one of the features in " + new_entry_name + " has an out of range location: " + e.getMessage());
+                break;
+            } catch (NoSequenceException e) {
+                new MessageDialog(this, "read failed: " + new_entry_name + " contains no sequence");
+                break;
+            }
         }
-      
-        if (new_entry_name.indexOf ("://") == -1) 
-        {
-          File file = new File (new_entry_name);
-          if(!file.exists())
-          {
-            JOptionPane.showMessageDialog(null, "File "+ 
-                new_entry_name +" not found.\n"+
-                "Check the file name.", "File Not Found", 
-                JOptionPane.WARNING_MESSAGE);
-          }
-        }  
-
-        final Document entry_document =
-          DocumentFactory.makeDocument(new_entry_name);
-
-        entry_document.addInputStreamProgressListener(getInputStreamProgressListener());
- 
-        final uk.ac.sanger.artemis.io.Entry new_embl_entry =
-          EntryFileDialog.getEntryFromFile(f, entry_document,
-                                           artemis_entry_information,
-                                           false);
-
-        if(new_embl_entry == null)  // the read failed
-          break;
-
-        try 
-        {
-          final Entry entry = new Entry(new_embl_entry);
-          last_entry_edit = makeEntryEdit(entry);
-          addEntryEdit(last_entry_edit);
-          getStatusLabel().setText("");
-        }
-        catch(OutOfRangeException e) 
-        {
-          new MessageDialog(this, "read failed: one of the features in " +
-                             new_entry_name + " has an out of range " +
-                             "location: " + e.getMessage());
-          break;
-        } 
-        catch(NoSequenceException e) 
-        {
-          new MessageDialog(this, "read failed: " +
-                             new_entry_name + " contains no sequence");
-          break;
-        }
-      }
     }
 
-    if(System.getProperty("offset") != null)
-      last_entry_edit.getGotoEventSource().gotoBase(
-          Integer.parseInt(System.getProperty("offset")));
-    
+    if (System.getProperty("offset") != null)
+        last_entry_edit.getGotoEventSource().gotoBase(Integer.parseInt(System.getProperty("offset")));
+
     last_entry_edit.setVisible(true);
-    for(int entry_index=0; entry_index<entry_edit_objects.size();
-        ++entry_index)
-    {
-      if(System.getProperty("offset") != null)
-        entry_edit_objects.elementAt(entry_index).getGotoEventSource().gotoBase(
-            Integer.parseInt(System.getProperty("offset")));
+    for (int entry_index = 0; entry_index < entry_edit_objects.size(); ++entry_index) {
+        if (System.getProperty("offset") != null)
+            entry_edit_objects.elementAt(entry_index).getGotoEventSource().gotoBase(Integer.parseInt(System.getProperty("offset")));
     }
-  }
+}
+
+private String stripQuotes(String input) {
+    if (input.startsWith("\"") && input.endsWith("\"")) {
+        return input.substring(1, input.length() - 1);
+    }
+    return input;
+}
+
   
   /**
    * Handle database connection and construction of EntryEdit

@@ -44,14 +44,15 @@ import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.event.ItemEvent;
 import java.awt.event.ItemListener;
-import java.io.IOException;
-import java.io.File;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.util.List;
 import java.util.Vector;
+import java.io.*;
 
 import javax.swing.*;
+
+import org.apache.log4j.PropertyConfigurator;
 
 /**
  *  This menu controls one particular BasePlotGroup.
@@ -93,6 +94,23 @@ public class GraphMenu extends JMenu
   private Vector<JCheckBoxMenuItem> algorithm_menu_items = new Vector <JCheckBoxMenuItem>();
 
   private JSplitPane splitPane;
+
+  static {
+    // Initialize log4j with the configuration file from the classpath
+    try (InputStream configStream = ProjectProperty.class.getClassLoader().getResourceAsStream("log4j.properties")) {
+        if (configStream != null) {
+            PropertyConfigurator.configure(configStream);
+            System.out.println("log4j.properties file found and loaded.");
+        } else {
+            System.err.println("log4j.properties file not found in the classpath");
+        }
+    } catch (Exception e) {
+        e.printStackTrace();
+    }
+  }
+
+   private static org.apache.log4j.Logger logger4j = 
+      org.apache.log4j.Logger.getLogger(GraphMenu.class);
   
   /**
    *  Create a new GraphMenu object and all it's menu items.
@@ -251,18 +269,26 @@ public class GraphMenu extends JMenu
     {
       String plots[] = new String[]{};
       if(System.getProperty("userplot"+ (index > 0 ? index : "")) != null)
-        plots = System.getProperty("userplot"+ (index > 0 ? index : "")).split("[\\s,]");
+        //plots = System.getProperty("userplot"+ (index > 0 ? index : "")).split("[\\s,]");
+        plots = System.getProperty("userplot"+ (index > 0 ? index : "")).replace("\"", "").split(",");
+        logger4j.debug("PLOTS: " + plots);
       
       String logplots[] = new String[]{};
       if(System.getProperty("loguserplot"+ (index > 0 ? index : "")) != null)
         logplots = System.getProperty("loguserplot"+ (index > 0 ? index : "")).split("[\\s,]");
       try
       {
-        for(int i=0;i<plots.length; i++)
-          addUserPlot (plots[i], false);
+        for(int i=0;i<plots.length; i++) {
+          String plot = plots[i].replace("\"","");
+          logger4j.debug("PLOT["+i+"]: " + plot);
+          addUserPlot (plot, false);
+        }
         
-        for(int i=0;i<logplots.length; i++)
+        for(int i=0;i<logplots.length; i++) {
+          String logplot = logplots[i].replace("\"","");
+          logger4j.debug("LOGPLOT["+i+"]: " + logplot);
           addUserPlot (logplots[i], true);
+        }
 
         splitPane.setDividerSize(3);
         splitPane.setDividerLocation(150);
@@ -561,7 +587,7 @@ public class GraphMenu extends JMenu
       if (f.exists())
         addUserPlot(new uk.ac.sanger.artemis.util.FileDocument(f), isLog);
       else
-        System.err.println(plot + " not found.");
+        System.err.println(plot + " Can't find the plot.");
     }
   }
   
